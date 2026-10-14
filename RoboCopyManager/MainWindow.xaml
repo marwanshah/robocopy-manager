@@ -524,7 +524,8 @@
                     </Button>
 
 
-                    <Button Style="{StaticResource ToolbarButton}">
+                    <Button Style="{StaticResource ToolbarButton}"
+                            Click="ViewLog_Click">
 
                         <StackPanel>
 

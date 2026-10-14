@@ -38,6 +38,9 @@ namespace RoboCopyManager
         private readonly RobocopyService robocopyService = new RobocopyService();
         private CancellationTokenSource? copyCancellationTokenSource;
         private bool isCopyRunning = false;
+        private readonly CopyHistoryService copyHistoryService = new CopyHistoryService();
+        private CopyHistoryEntry? currentHistoryEntry;
+        private DateTime historyStartTime;
 
         public MainWindow()
         {
@@ -533,6 +536,8 @@ namespace RoboCopyManager
 
             CopyPlan? plan = null;
 
+            BeginHistoryEntry(source, destination);
+
             try
             {
                 // =====================================================
@@ -614,6 +619,12 @@ namespace RoboCopyManager
                         copyResult.WasCancelled = true;
                         SetStatusBadge("Cancelled");
 
+                        AppendHistoryLog("User cancelled at the empty destination confirmation.");
+                        UpdateHistoryStatus(
+                            "Cancelled",
+                            "User cancelled before copying started.",
+                            finished: true);
+
                         return;
                     }
                 }
@@ -647,6 +658,13 @@ namespace RoboCopyManager
 
                         copyResult.WasCancelled = true;
                         SetStatusBadge("Cancelled");
+
+                        AppendHistoryLog("User cancelled at the copy review window.");
+
+                        UpdateHistoryStatus(
+                            "Cancelled",
+                            "User cancelled during copy review, before copying started.",
+                            finished: true);
 
                         return;
                     }
@@ -683,6 +701,11 @@ namespace RoboCopyManager
                         copyResult.WasCancelled = true;
                         SetStatusBadge("Cancelled");
 
+                        UpdateHistoryStatus(
+                            "Cancelled",
+                            "User cancelled during conflict resolution, before copying started.",
+                            finished: true);
+
                         return;
                     }
                 }
@@ -707,6 +730,11 @@ namespace RoboCopyManager
 
                 totalFiles = plan.TotalFiles;
                 totalBytes = plan.TotalBytes;
+
+                if (currentHistoryEntry != null)
+                {
+                    currentHistoryEntry.TotalFiles = plan.TotalFiles;
+                }
 
                 completedFiles = 0;
                 completedBytes = 0;
@@ -762,6 +790,13 @@ namespace RoboCopyManager
                             "No changes";
                     }
 
+                    AppendHistoryLog("No files need to be copied.");
+
+                    UpdateHistoryStatus(
+                        "Completed",
+                        "No changes. Nothing to copy.",
+                        finished: true);
+
                     return;
                 }
 
@@ -792,6 +827,9 @@ namespace RoboCopyManager
                         line =>
                         {
                             System.Diagnostics.Debug.WriteLine(line);
+
+                            AppendHistoryLog(line);
+                            UpdateHistoryStatistics(line);
 
                             var fileMatch =
                                 System.Text.RegularExpressions.Regex.Match(
@@ -843,6 +881,11 @@ namespace RoboCopyManager
                         transferredBytes =>
                         {
                             completedBytes = transferredBytes;
+
+                            if (currentHistoryEntry != null)
+                            {
+                                currentHistoryEntry.BytesTransferred = transferredBytes;
+                            }
 
                             if (totalBytes <= 0)
                             {
@@ -960,6 +1003,30 @@ namespace RoboCopyManager
                     ? "Current: Completed"
                     : "Current: Copy failed";
 
+                string finalStatus = exitCode <= 7
+                    ? "Completed"
+                    : "Failed";
+
+                string finalRemarks = exitCode switch
+                {
+                    0 => "No changes",
+                    1 => "Files copied",
+                    2 => "Extra files detected",
+                    3 => "Files copied, extra files detected",
+                    4 => "Mismatched files detected",
+                    5 => "Files copied with mismatches",
+                    6 => "Extra files and mismatches detected",
+                    7 => "Files copied with extras and mismatches",
+                    _ => $"Copy failed. Robocopy exit code: {exitCode}"
+                };
+
+                AppendHistoryLog($"Robocopy exit code: {exitCode}");
+
+                UpdateHistoryStatus(
+                    finalStatus,
+                    finalRemarks,
+                    finished: true);
+
                 // =====================================================
                 // STEP 8
                 // Show copy summary
@@ -986,6 +1053,13 @@ namespace RoboCopyManager
 
                 CurrentFileText.Text = "Current: Cancelled";
                 EtaText.Text = "ETA: --:--:--";
+
+                AppendHistoryLog("Copy operation was cancelled by the user.");
+
+                UpdateHistoryStatus(
+                    "Cancelled",
+                    "Copy operation cancelled before completion.",
+                    finished: true);
 
                 if (plan != null)
                 {
@@ -1022,6 +1096,13 @@ namespace RoboCopyManager
                 SetStatusBadge("Failed");
 
                 CurrentFileText.Text = "Current: Error";
+
+                AppendHistoryLog($"Exception: {ex}");
+
+                UpdateHistoryStatus(
+                    "Failed",
+                    $"An error occurred: {ex.Message}",
+                    finished: true);
 
                 MessageBox.Show(
                     $"An error occurred while processing the job:\n\n{ex.Message}",
@@ -1148,6 +1229,128 @@ namespace RoboCopyManager
         private void About_Click(object sender, RoutedEventArgs e)
         {
             var window = new AboutWindow
+            {
+                Owner = this
+            };
+
+            window.ShowDialog();
+        }
+
+        private void BeginHistoryEntry(string source, string destination)
+        {
+            historyStartTime = DateTime.Now;
+
+            currentHistoryEntry = new CopyHistoryEntry
+            {
+                StartTime = historyStartTime,
+                Source = source,
+                Destination = destination,
+                Status = "Analyzing",
+                Remarks = "Job started."
+            };
+
+            currentHistoryEntry.LogFilePath =
+                copyHistoryService.CreateLogFilePath(currentHistoryEntry.Id);
+
+            AppendHistoryLog($"Attempt started.");
+            AppendHistoryLog($"Source: {source}");
+            AppendHistoryLog($"Destination: {destination}");
+
+            SaveCurrentHistory();
+        }
+
+        private void AppendHistoryLog(string message)
+        {
+            try
+            {
+                if (currentHistoryEntry == null)
+                    return;
+
+                copyHistoryService.AppendLog(
+                    currentHistoryEntry.LogFilePath,
+                    message);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"History log error: {ex.Message}");
+            }
+        }
+
+        private void SaveCurrentHistory()
+        {
+            try
+            {
+                if (currentHistoryEntry == null)
+                    return;
+
+                copyHistoryService.SaveHistory(currentHistoryEntry);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"History save error: {ex.Message}");
+            }
+        }
+
+        private void UpdateHistoryStatus(
+            string status,
+            string remarks = "",
+            bool finished = false)
+        {
+            if (currentHistoryEntry == null)
+                return;
+
+            currentHistoryEntry.Status = status;
+            currentHistoryEntry.Remarks = remarks;
+
+            if (finished)
+            {
+                currentHistoryEntry.EndTime = DateTime.Now;
+                currentHistoryEntry.DurationSeconds =
+                    (currentHistoryEntry.EndTime.Value - historyStartTime)
+                    .TotalSeconds;
+            }
+
+            AppendHistoryLog(
+                $"Status: {status}" +
+                (string.IsNullOrWhiteSpace(remarks) ? "" : $" | {remarks}"));
+
+            SaveCurrentHistory();
+        }
+
+        private void UpdateHistoryStatistics(string output)
+        {
+            if (currentHistoryEntry == null ||
+                string.IsNullOrWhiteSpace(output))
+                return;
+
+            var filesMatch =
+                System.Text.RegularExpressions.Regex.Match(
+                    output,
+                    @"^\s*Files\s*:\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)");
+
+            if (!filesMatch.Success)
+                return;
+
+            if (int.TryParse(
+                filesMatch.Groups[2].Value,
+                out int copiedFiles))
+            {
+                currentHistoryEntry.CopiedFiles += copiedFiles;
+            }
+
+            if (int.TryParse(
+                filesMatch.Groups[5].Value,
+                out int failedFiles))
+            {
+                currentHistoryEntry.FailedFiles += failedFiles;
+            }
+        }
+
+        private void ViewLog_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new HistoryWindow
             {
                 Owner = this
             };
