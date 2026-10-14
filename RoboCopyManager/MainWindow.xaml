@@ -1,0 +1,824 @@
+﻿<Window x:Class="RoboCopyManager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RoboCopy Manager"
+        Width="1200"
+        Height="750"
+        MinWidth="1000"
+        MinHeight="650"
+        WindowStartupLocation="CenterScreen"
+        Background="#F3F6FA"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+
+        <!-- ========================= -->
+        <!-- COLORS -->
+        <!-- ========================= -->
+
+        <SolidColorBrush x:Key="WindowBackground"
+                         Color="#F3F6FA"/>
+
+        <SolidColorBrush x:Key="PanelBackground"
+                         Color="#FFFFFF"/>
+
+        <SolidColorBrush x:Key="BorderColor"
+                         Color="#D7DEE8"/>
+
+        <SolidColorBrush x:Key="TextColor"
+                         Color="#172033"/>
+
+        <SolidColorBrush x:Key="SecondaryTextColor"
+                         Color="#667085"/>
+
+        <SolidColorBrush x:Key="AccentColor"
+                         Color="#1677E8"/>
+
+        <!-- ========================= -->
+        <!-- PROGRESS BAR -->
+        <!-- ========================= -->
+
+        <Style x:Key="ModernProgressBar"
+       TargetType="ProgressBar">
+
+            <Setter Property="Background"
+            Value="#E5EAF0"/>
+
+            <Setter Property="Foreground"
+            Value="#1677E8"/>
+
+            <Setter Property="BorderThickness"
+            Value="0"/>
+
+        </Style>
+
+
+        <!-- ========================= -->
+        <!-- TOOLBAR BUTTON -->
+        <!-- ========================= -->
+
+        <Style x:Key="ToolbarButton"
+               TargetType="Button">
+
+            <Setter Property="Background"
+                    Value="Transparent"/>
+
+            <Setter Property="BorderThickness"
+                    Value="0"/>
+
+            <Setter Property="Padding"
+                    Value="16,8"/>
+
+            <Setter Property="Margin"
+                    Value="2,0"/>
+
+            <Setter Property="Foreground"
+                    Value="{StaticResource TextColor}"/>
+
+            <Setter Property="Cursor"
+                    Value="Hand"/>
+
+            <Setter Property="Template">
+
+                <Setter.Value>
+
+                    <ControlTemplate TargetType="Button">
+
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+
+                            <ContentPresenter
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+
+                            <Trigger Property="IsMouseOver"
+                                     Value="True">
+
+                                <Setter TargetName="ButtonBorder"
+                                        Property="Background"
+                                        Value="#E8F2FF"/>
+
+                            </Trigger>
+
+                            <Trigger Property="IsPressed"
+                                     Value="True">
+
+                                <Setter TargetName="ButtonBorder"
+                                        Property="Background"
+                                        Value="#D5E7FF"/>
+
+                            </Trigger>
+
+                        </ControlTemplate.Triggers>
+
+                    </ControlTemplate>
+
+                </Setter.Value>
+
+            </Setter>
+
+        </Style>
+
+
+        <!-- ========================= -->
+        <!-- PRIMARY BUTTON -->
+        <!-- ========================= -->
+
+        <Style x:Key="PrimaryButton"
+               TargetType="Button">
+
+            <Setter Property="Background"
+                    Value="#1677E8"/>
+
+            <Setter Property="Foreground"
+                    Value="White"/>
+
+            <Setter Property="BorderThickness"
+                    Value="0"/>
+
+            <Setter Property="FontSize"
+                    Value="14"/>
+
+            <Setter Property="FontWeight"
+                    Value="SemiBold"/>
+
+            <Setter Property="Padding"
+                    Value="20,10"/>
+
+            <Setter Property="Cursor"
+                    Value="Hand"/>
+
+            <Setter Property="Template">
+
+                <Setter.Value>
+
+                    <ControlTemplate TargetType="Button">
+
+                        <Border x:Name="PrimaryBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+
+                            <Border.Effect>
+
+                                <DropShadowEffect
+                                    BlurRadius="8"
+                                    ShadowDepth="2"
+                                    Opacity="0.22"/>
+
+                            </Border.Effect>
+
+                            <ContentPresenter
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+
+                            <Trigger Property="IsMouseOver"
+                                     Value="True">
+
+                                <Setter TargetName="PrimaryBorder"
+                                        Property="Background"
+                                        Value="#0D6EDB"/>
+
+                            </Trigger>
+
+                            <Trigger Property="IsPressed"
+                                     Value="True">
+
+                                <Setter TargetName="PrimaryBorder"
+                                        Property="Background"
+                                        Value="#095EBE"/>
+
+                            </Trigger>
+
+                        </ControlTemplate.Triggers>
+
+                    </ControlTemplate>
+
+                </Setter.Value>
+
+            </Setter>
+
+        </Style>
+
+
+        <!-- ========================= -->
+        <!-- SECONDARY BUTTON -->
+        <!-- ========================= -->
+
+        <Style x:Key="SecondaryButton"
+               TargetType="Button">
+
+            <Setter Property="Background"
+                    Value="#FFFFFF"/>
+
+            <Setter Property="Foreground"
+                    Value="{StaticResource TextColor}"/>
+
+            <Setter Property="BorderBrush"
+                    Value="#CBD5E1"/>
+
+            <Setter Property="BorderThickness"
+                    Value="1"/>
+
+            <Setter Property="Padding"
+                    Value="20,10"/>
+
+            <Setter Property="Cursor"
+                    Value="Hand"/>
+
+            <Setter Property="Template">
+
+                <Setter.Value>
+
+                    <ControlTemplate TargetType="Button">
+
+                        <Border x:Name="SecondaryBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+
+                            <ContentPresenter
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+
+                            <Trigger Property="IsMouseOver"
+                                     Value="True">
+
+                                <Setter TargetName="SecondaryBorder"
+                                        Property="Background"
+                                        Value="#F5F8FC"/>
+
+                            </Trigger>
+
+                        </ControlTemplate.Triggers>
+
+                    </ControlTemplate>
+
+                </Setter.Value>
+
+            </Setter>
+
+        </Style>
+
+
+        <!-- ========================= -->
+        <!-- STATUS -->
+        <!-- ========================= -->
+
+        <Style x:Key="StatusText"
+               TargetType="TextBlock">
+
+            <Setter Property="FontSize"
+                    Value="13"/>
+
+            <Setter Property="VerticalAlignment"
+                    Value="Center"/>
+
+        </Style>
+
+        <!-- ========================= -->
+        <!-- TABLE HEADER -->
+        <!-- ========================= -->
+
+        <Style x:Key="TableHeaderText"
+               TargetType="TextBlock">
+
+            <Setter Property="FontWeight"
+            Value="SemiBold"/>
+
+            <Setter Property="HorizontalAlignment"
+            Value="Stretch"/>
+
+            <Setter Property="TextAlignment"
+            Value="Center"/>
+
+            <Setter Property="VerticalAlignment"
+            Value="Center"/>
+
+        </Style>
+
+    </Window.Resources>
+
+
+    <!-- ========================= -->
+    <!-- MAIN CONTAINER -->
+    <!-- ========================= -->
+
+    <Border Margin="18"
+            Background="{StaticResource PanelBackground}"
+            CornerRadius="12"
+            BorderBrush="{StaticResource BorderColor}"
+            BorderThickness="1">
+
+        <Border.Effect>
+
+            <DropShadowEffect
+                BlurRadius="22"
+                ShadowDepth="5"
+                Opacity="0.16"/>
+
+        </Border.Effect>
+
+
+        <Grid>
+
+            <Grid.RowDefinitions>
+
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+
+            </Grid.RowDefinitions>
+
+
+            <!-- ========================= -->
+            <!-- HEADER -->
+            <!-- ========================= -->
+
+            <Border Grid.Row="0"
+                    Padding="24,18"
+                    BorderBrush="#E3E8EF"
+                    BorderThickness="0,0,0,1">
+
+                <Grid>
+
+                    <Grid.ColumnDefinitions>
+
+                        <ColumnDefinition Width="*"/>
+
+                        <ColumnDefinition Width="Auto"/>
+
+                    </Grid.ColumnDefinitions>
+
+
+                    <StackPanel>
+
+                        <TextBlock Text="RoboCopy Manager"
+                                   FontSize="25"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextColor}"/>
+
+                        <TextBlock Text="Fast and reliable file transfer"
+                                   FontSize="13"
+                                   Foreground="{StaticResource SecondaryTextColor}"
+                                   Margin="0,3,0,0"/>
+
+                    </StackPanel>
+
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+
+                        <Border x:Name="StatusBadge"
+                                Background="#EAF4FF"
+                                CornerRadius="6"
+                                Padding="10,6"
+                                Margin="0,0,12,0">
+
+                            <StackPanel Orientation="Horizontal">
+
+                                <Ellipse x:Name="StatusBadgeDot"
+                                         Width="8"
+                                         Height="8"
+                                         Fill="#24A148"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,7,0"/>
+
+                                <TextBlock x:Name="StatusBadgeText"
+                                           Text="Ready"
+                                           Foreground="#176B35"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"/>
+
+                            </StackPanel>
+
+                        </Border>
+
+                    </StackPanel>
+
+                </Grid>
+
+            </Border>
+
+
+            <!-- ========================= -->
+            <!-- TOOLBAR -->
+            <!-- ========================= -->
+
+            <Border Grid.Row="1"
+                    Background="#F8FAFD"
+                    Padding="12,8"
+                    BorderBrush="#E3E8EF"
+                    BorderThickness="0,0,0,1">
+
+                <StackPanel Orientation="Horizontal">
+
+                    <Button Style="{StaticResource ToolbarButton}"
+                            Click="AddJob_Click">
+
+                        <StackPanel>
+
+                            <TextBlock Text="＋"
+                                       FontSize="25"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="Add Job"
+                                       FontSize="12"/>
+
+                        </StackPanel>
+
+                    </Button>
+
+
+                    <Button Style="{StaticResource ToolbarButton}"
+                            Click="EditJob_Click">
+
+                        <StackPanel>
+
+                            <TextBlock Text="✎"
+                                       FontSize="22"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="Edit Job"
+                                       FontSize="12"/>
+
+                        </StackPanel>
+
+                    </Button>
+
+
+                    <Button Style="{StaticResource ToolbarButton}"
+                            Click="RemoveJob_Click">
+
+                        <StackPanel>
+
+                            <TextBlock Text="✕"
+                                       FontSize="22"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="Remove"
+                                       FontSize="12"/>
+
+                        </StackPanel>
+
+                    </Button>
+
+
+                    <Border Width="1"
+                            Height="45"
+                            Background="#D7DEE8"
+                            Margin="12,0"/>
+
+
+                    <Button Style="{StaticResource ToolbarButton}"
+                            Click="StartJob_Click">
+
+                        <StackPanel>
+
+                            <TextBlock Text="▶"
+                                       FontSize="22"
+                                       Foreground="#1677E8"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="Start"
+                                       FontSize="12"/>
+
+                        </StackPanel>
+
+                    </Button>
+
+
+                    <Button Style="{StaticResource ToolbarButton}">
+
+                        <StackPanel>
+
+                            <TextBlock Text="■"
+                                       FontSize="20"
+                                       Foreground="#6B7280"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="Stop"
+                                       FontSize="12"/>
+
+                        </StackPanel>
+
+                    </Button>
+
+
+                    <Button Style="{StaticResource ToolbarButton}">
+
+                        <StackPanel>
+
+                            <TextBlock Text="▤"
+                                       FontSize="22"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="View Log"
+                                       FontSize="12"/>
+
+                        </StackPanel>
+
+                    </Button>
+
+                </StackPanel>
+
+            </Border>
+
+
+            <!-- ========================= -->
+            <!-- JOB TABLE -->
+            <!-- ========================= -->
+
+            <Border Grid.Row="2"
+                    Margin="18"
+                    BorderBrush="{StaticResource BorderColor}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+
+                <Grid>
+
+                    <Grid.RowDefinitions>
+
+                        <RowDefinition Height="45"/>
+                        <RowDefinition Height="*"/>
+
+                    </Grid.RowDefinitions>
+
+
+                    <!-- TABLE HEADER -->
+
+                    <Border Grid.Row="0"
+                            Background="#F4F7FB"
+                            CornerRadius="8,8,0,0">
+
+                        <Grid>
+
+                            <Grid.ColumnDefinitions>
+
+                                <!-- Left padding -->
+                                <ColumnDefinition Width="12"/>
+
+                                <!-- # -->
+                                <ColumnDefinition Width="45"/>
+
+                                <!-- Source -->
+                                <ColumnDefinition Width="2*"/>
+
+                                <!-- Destination -->
+                                <ColumnDefinition Width="2*"/>
+
+                                <!-- Status -->
+                                <ColumnDefinition Width="130"/>
+
+                                <!-- Last Run -->
+                                <ColumnDefinition Width="160"/>
+
+                                <!-- Remarks -->
+                                <ColumnDefinition Width="160"/>
+
+                                <!-- Right padding -->
+                                <ColumnDefinition Width="12"/>
+
+                            </Grid.ColumnDefinitions>
+
+
+                            <TextBlock Text="#"
+                                       Grid.Column="1"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+
+
+                            <TextBlock Text="Source"
+                                       Grid.Column="2"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center"/>
+
+
+                            <TextBlock Text="Destination"
+                                       Grid.Column="3"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center"/>
+
+
+                            <TextBlock Text="Status"
+                                       Grid.Column="4"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+
+
+                            <TextBlock Text="Last Run"
+                                       Grid.Column="5"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+
+
+                            <TextBlock Text="Remarks"
+                                       Grid.Column="6"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+
+                        </Grid>
+
+                    </Border>
+
+
+                    <!-- EMPTY STATE -->
+
+                    <Grid Grid.Row="1">
+
+                        <!-- EMPTY STATE CONTENT -->
+                        <StackPanel x:Name="EmptyStatePanel"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+
+                            <Border x:Name="EmptyStateIcon"
+                                    Width="64"
+                                    Height="64"
+                                    Background="#EDF5FF"
+                                    CornerRadius="32"
+                                    HorizontalAlignment="Center">
+
+                                <TextBlock Text="▣"
+                                           FontSize="28"
+                                           Foreground="#1677E8"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+
+                            </Border>
+
+                            <TextBlock x:Name="EmptyStateTitle"
+                                       Text="No copy jobs"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextColor}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,14,0,0"/>
+
+                            <TextBlock x:Name="EmptyStateMessage"
+                                       Text="Click Add Job to create your first transfer."
+                                       FontSize="13"
+                                       Foreground="{StaticResource SecondaryTextColor}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,5,0,0"/>
+
+                        </StackPanel>
+
+                        <!-- JOB ROWS -->
+                        <StackPanel x:Name="JobRowsPanel"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Top"
+                                    Margin="0"/>
+
+                    </Grid>
+                </Grid>
+
+            </Border>
+
+
+            <!-- ========================= -->
+            <!-- STATUS BAR -->
+            <!-- ========================= -->
+
+            <Border Grid.Row="3"
+                    Background="#F8FAFD"
+                    Padding="18,14"
+                    BorderBrush="#E3E8EF"
+                    BorderThickness="0,1,0,0">
+
+                <Grid>
+
+                    <Grid.ColumnDefinitions>
+
+                        <!-- Left -->
+                        <ColumnDefinition Width="*"/>
+
+                        <!-- Overall -->
+                        <ColumnDefinition Width="200"/>
+
+                        <!-- Current File -->
+                        <ColumnDefinition Width="220"/>
+
+                        <!-- Speed / ETA -->
+                        <ColumnDefinition Width="260"/>
+
+                    </Grid.ColumnDefinitions>
+
+
+                    <!-- JOB STATUS -->
+
+                    <StackPanel Orientation="Horizontal"
+                    VerticalAlignment="Center">
+
+                        <TextBlock x:Name="JobCountText"
+                                   Text="0 job(s)"
+                                   FontSize="12"
+                                   Foreground="{StaticResource SecondaryTextColor}"/>
+
+                        <Border Width="1"
+                                Height="15"
+                                Background="#CBD5E1"
+                                Margin="15,0"/>
+
+                        <TextBlock x:Name="BottomStatusText" 
+                                   Text="Ready"
+                                   FontSize="12"
+                                   Foreground="#176B35"/>
+
+                    </StackPanel>
+
+
+                    <!-- OVERALL PROGRESS -->
+
+                    <Grid Grid.Column="1"
+                          Width="170"
+                          Height="22"
+                          VerticalAlignment="Center"
+                          HorizontalAlignment="Center">
+
+                        <ProgressBar x:Name="OverallProgressBar"
+                                     Style="{StaticResource ModernProgressBar}"
+                                     Minimum="0"
+                                     Maximum="100"
+                                     Value="0"
+                                     Height="18"
+                                     VerticalAlignment="Center"/>
+
+                        <TextBlock x:Name="OverallProgressText"
+                                   Text="Overall Progress: 0%"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextColor}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+
+
+                    <!-- CURRENT FILE -->
+
+                    <TextBlock x:Name="CurrentFileText"
+                   Grid.Column="2"
+                   Text="Current: -"
+                   FontSize="12"
+                   Foreground="{StaticResource SecondaryTextColor}"
+                   VerticalAlignment="Center"
+                   HorizontalAlignment="Left"
+                   TextTrimming="CharacterEllipsis"/>
+
+
+                    <!-- SPEED / ETA -->
+
+                    <StackPanel Grid.Column="3"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Right">
+
+                        <TextBlock x:Name="SpeedText"
+                                   Text="Speed: 0 MB/s"
+                                   Width="130"
+                                   TextAlignment="Right"
+                                   FontSize="12"
+                                   Foreground="{StaticResource SecondaryTextColor}"
+                                   Margin="0,0,20,0"/>
+
+                        <TextBlock x:Name="EtaText"
+                                   Text="ETA: --:--:--"
+                                   Width="110"
+                                   TextAlignment="Right"
+                                   FontSize="12"
+                                   Foreground="{StaticResource SecondaryTextColor}"/>
+
+                    </StackPanel>
+
+                </Grid>
+
+            </Border>
+
+        </Grid>
+
+    </Border>
+
+</Window>
