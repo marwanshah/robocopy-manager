@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -9,6 +10,9 @@ namespace RoboCopyManager
 {
     internal class RobocopyService
     {
+        private readonly HashSet<string> successfullyCopiedFiles =
+        new(StringComparer.OrdinalIgnoreCase);
+
         public async Task<int> GetTotalFileCountAsync(
             string source,
             bool isFileSource)
@@ -508,6 +512,14 @@ namespace RoboCopyManager
             }
 
             return summary;
+        }
+        public void RecordSuccessfullyCopiedFile(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+                return;
+
+            successfullyCopiedFiles.Add(
+                Path.GetFullPath(filePath));
         }
     }
 }
