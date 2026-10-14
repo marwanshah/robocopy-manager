@@ -506,7 +506,8 @@
                     </Button>
 
 
-                    <Button Style="{StaticResource ToolbarButton}">
+                    <Button Style="{StaticResource ToolbarButton}"
+                            Click="StopJob_Click">
 
                         <StackPanel>
 

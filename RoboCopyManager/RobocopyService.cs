@@ -236,9 +236,10 @@ namespace RoboCopyManager
         }
 
         public async Task<int> RunCopyPlanAsync(
-    CopyPlan plan,
-    Action<string>? outputHandler = null,
-    Action<long>? progressHandler = null)
+            CopyPlan plan,
+            Action<string>? outputHandler = null,
+            Action<long>? progressHandler = null,
+            CancellationToken cancellationToken = default)
         {
             if (plan.FilesToCopy.Count == 0)
             {
@@ -272,13 +273,15 @@ namespace RoboCopyManager
 
                     foreach (CopyFileInfo file in plan.FilesToCopy)
                     {
+                        if (progressCts.Token.IsCancellationRequested)
+                            break;
+
                         try
                         {
                             if (File.Exists(file.DestinationPath))
                             {
                                 long destinationSize =
-                                    new FileInfo(
-                                        file.DestinationPath).Length;
+                                    new FileInfo(file.DestinationPath).Length;
 
                                 transferredBytes += Math.Min(
                                     destinationSize,
@@ -292,55 +295,65 @@ namespace RoboCopyManager
                         }
                     }
 
-                    progressHandler?.Invoke(
-                        transferredBytes);
+                    if (!progressCts.Token.IsCancellationRequested)
+                    {
+                        progressHandler?.Invoke(transferredBytes);
+                    }
 
                     try
                     {
-                        await Task.Delay(
-                            250,
-                            progressCts.Token);
+                        await Task.Delay(250, progressCts.Token);
                     }
-                    catch (TaskCanceledException)
+                    catch (OperationCanceledException)
                     {
                         break;
                     }
                 }
             });
 
-            foreach (var group in fileGroups)
-            {
-                string sourceDirectory =
-                    group.Key.SourceDirectory;
-
-                string destinationDirectory =
-                    group.Key.DestinationDirectory;
-
-                string fileArguments = string.Join(
-                    " ",
-                    group.Select(file =>
-                        $"\"{Path.GetFileName(file.SourcePath)}\""));
-
-                int exitCode = await RunRobocopyAsync(
-                    sourceDirectory,
-                    destinationDirectory,
-                    fileArguments,
-                    outputHandler);
-
-                if (exitCode > highestExitCode)
-                {
-                    highestExitCode = exitCode;
-                }
-            }
-
-            progressCts.Cancel();
-
             try
             {
-                await progressTask;
+                foreach (var group in fileGroups)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    string sourceDirectory =
+                        group.Key.SourceDirectory;
+
+                    string destinationDirectory =
+                        group.Key.DestinationDirectory;
+
+                    string fileArguments = string.Join(
+                        " ",
+                        group.Select(file =>
+                            $"\"{Path.GetFileName(file.SourcePath)}\""));
+
+                    int exitCode = await RunRobocopyAsync(
+                        sourceDirectory,
+                        destinationDirectory,
+                        fileArguments,
+                        outputHandler,
+                        cancellationToken);
+
+                    if (exitCode > highestExitCode)
+                    {
+                        highestExitCode = exitCode;
+                    }
+                }
             }
-            catch (TaskCanceledException)
+            finally
             {
+                // Always stop the progress task, including cancellation.
+                progressCts.Cancel();
+
+                try
+                {
+                    await progressTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected when progress tracking is cancelled.
+                }
             }
 
             // Final progress measurement
@@ -353,8 +366,7 @@ namespace RoboCopyManager
                     if (File.Exists(file.DestinationPath))
                     {
                         long destinationSize =
-                            new FileInfo(
-                                file.DestinationPath).Length;
+                            new FileInfo(file.DestinationPath).Length;
 
                         finalTransferredBytes += Math.Min(
                             destinationSize,
@@ -363,11 +375,11 @@ namespace RoboCopyManager
                 }
                 catch
                 {
+                    // Ignore files that cannot be inspected.
                 }
             }
 
-            progressHandler?.Invoke(
-                finalTransferredBytes);
+            progressHandler?.Invoke(finalTransferredBytes);
 
             return highestExitCode;
         }
@@ -376,8 +388,11 @@ namespace RoboCopyManager
             string source,
             string destination,
             string fileArguments = "",
-            Action<string>? outputHandler = null)
+            Action<string>? outputHandler = null,
+            CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var startInfo = new ProcessStartInfo
             {
                 FileName = "robocopy.exe",
@@ -397,13 +412,37 @@ namespace RoboCopyManager
 
             process.Start();
 
-            Task outputTask = Task.Run(async () =>
-            {
-                while (await process.StandardOutput.ReadLineAsync() is string line)
+            using CancellationTokenRegistration registration =
+                cancellationToken.Register(() =>
                 {
-                    outputHandler?.Invoke(line);
-                }
-            });
+                    try
+                    {
+                        if (!process.HasExited)
+                        {
+                            process.Kill(entireProcessTree: true);
+                        }
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // Process has already been disposed.
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Process has already exited.
+                    }
+                    catch (System.ComponentModel.Win32Exception)
+                    {
+                        // Process could not be terminated.
+                    }
+                });
+
+            Task outputTask = Task.Run(async () =>
+                    {
+                        while (await process.StandardOutput.ReadLineAsync() is string line)
+                        {
+                            outputHandler?.Invoke(line);
+                        }
+                    });
 
             Task errorTask = Task.Run(async () =>
             {
@@ -417,7 +456,58 @@ namespace RoboCopyManager
 
             await Task.WhenAll(outputTask, errorTask);
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             return process.ExitCode;
+        }
+
+        public CopyCancellationSummary GetCancellationSummary(
+        CopyPlan plan,
+        TimeSpan duration)
+        {
+            var summary = new CopyCancellationSummary
+            {
+                TotalFiles = plan.FilesToCopy.Count,
+                Duration = duration
+            };
+
+            foreach (CopyFileInfo file in plan.FilesToCopy)
+            {
+                try
+                {
+                    if (!File.Exists(file.DestinationPath))
+                    {
+                        summary.NotCopied++;
+                        continue;
+                    }
+
+                    long destinationSize =
+                        new FileInfo(file.DestinationPath).Length;
+
+                    summary.DataTransferredBytes += Math.Min(
+                        destinationSize,
+                        file.SourceSize);
+
+                    if (destinationSize == file.SourceSize)
+                    {
+                        summary.FullyCopied++;
+                    }
+                    else if (destinationSize > 0)
+                    {
+                        summary.PartiallyCopied++;
+                    }
+                    else
+                    {
+                        summary.NotCopied++;
+                    }
+                }
+                catch
+                {
+                    summary.NotCopied++;
+                }
+            }
+
+            return summary;
         }
     }
 }

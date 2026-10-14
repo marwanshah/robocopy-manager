@@ -2,7 +2,9 @@
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -34,6 +36,8 @@ namespace RoboCopyManager
 
         private Grid? selectedRow;
         private readonly RobocopyService robocopyService = new RobocopyService();
+        private CancellationTokenSource? copyCancellationTokenSource;
+        private bool isCopyRunning = false;
 
         public MainWindow()
         {
@@ -444,6 +448,26 @@ namespace RoboCopyManager
                     break;
             }
         }
+
+        private void StopJob_Click(object sender, RoutedEventArgs e)
+        {
+            if (!isCopyRunning || copyCancellationTokenSource == null)
+            {
+                MessageBox.Show(
+                    "There is no active copy job to stop.",
+                    "RoboCopy Manager",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            copyCancellationTokenSource.Cancel();
+
+            CurrentFileText.Text = "Current: Stopping...";
+            BottomStatusText.Text = "Stopping...";
+        }
+
         private async void StartJob_Click(
             object sender,
             RoutedEventArgs e)
@@ -506,6 +530,8 @@ namespace RoboCopyManager
 
             EtaText.Text =
                 "ETA: --:--:--";
+
+            CopyPlan? plan = null;
 
             try
             {
@@ -676,9 +702,8 @@ namespace RoboCopyManager
                 // Build final copy plan
                 // =====================================================
 
-                CopyPlan plan =
-                    robocopyService.BuildCopyPlan(
-                        analysis);
+                plan = robocopyService.BuildCopyPlan(
+                    analysis);
 
                 totalFiles = plan.TotalFiles;
                 totalBytes = plan.TotalBytes;
@@ -752,6 +777,10 @@ namespace RoboCopyManager
                 }
 
                 SetStatusBadge("Copying");
+
+                copyCancellationTokenSource?.Dispose();
+                copyCancellationTokenSource = new CancellationTokenSource();
+                isCopyRunning = true;
 
                 CurrentFileText.Text =
                     $"Current: 0 / {plan.TotalFiles}";
@@ -836,7 +865,8 @@ namespace RoboCopyManager
                                 OverallProgressText.Text =
                                     $"Overall Progress: {overallPercentage}%";
                             });
-                        });
+                        },
+                        copyCancellationTokenSource.Token);
 
                 transferStopwatch.Stop();
 
@@ -941,20 +971,57 @@ namespace RoboCopyManager
                     };
 
                 summaryWindow.ShowDialog();
-                    }
+            }
 
+            catch (OperationCanceledException)
+            {
+                transferStopwatch.Stop();
+
+                if (selectedRow?.Children[3] is TextBlock cancelledStatusCell)
+                {
+                    cancelledStatusCell.Text = "Cancelled";
+                }
+
+                SetStatusBadge("Cancelled");
+
+                CurrentFileText.Text = "Current: Cancelled";
+                EtaText.Text = "ETA: --:--:--";
+
+                if (plan != null)
+                {
+                    CopyCancellationSummary summary =
+                        robocopyService.GetCancellationSummary(
+                            plan,
+                            transferStopwatch.Elapsed);
+
+                    double transferredMB =
+                        summary.DataTransferredBytes / (1024.0 * 1024.0);
+
+                    string transferredData = transferredMB >= 1024
+                        ? $"{transferredMB / 1024.0:F2} GB"
+                        : $"{transferredMB:F2} MB";
+
+                    var summaryWindow =
+                        new CopyCancellationSummaryWindow(summary)
+                        {
+                            Owner = this
+                        };
+
+                    summaryWindow.ShowDialog();
+                }
+            }
             catch (Exception ex)
             {
                 transferStopwatch.Stop();
 
-                if (selectedRow.Children[3]
-                    is TextBlock errorStatusCell)
+                if (selectedRow?.Children[3] is TextBlock errorStatusCell)
                 {
                     errorStatusCell.Text = "Failed";
                 }
 
-                CurrentFileText.Text =
-                    "Current: Error";
+                SetStatusBadge("Failed");
+
+                CurrentFileText.Text = "Current: Error";
 
                 MessageBox.Show(
                     $"An error occurred while processing the job:\n\n{ex.Message}",
@@ -962,9 +1029,16 @@ namespace RoboCopyManager
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
             }
+            finally
+            {
+                isCopyRunning = false;
+
+                copyCancellationTokenSource?.Dispose();
+                copyCancellationTokenSource = null;
+            }
         }
 
-        private string FindSourceFilePath(
+            private string FindSourceFilePath(
             string source,
             string fileName,
             bool isFileSource)
