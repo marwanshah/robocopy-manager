@@ -539,6 +539,20 @@
 
                     </Button>
 
+                    <Button Style="{StaticResource ToolbarButton}"
+                            Click="About_Click">
+
+                        <StackPanel>
+                            <TextBlock Text="ⓘ"
+                                       FontSize="22"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="About"
+                                        FontSize="12"/>
+                        </StackPanel>
+
+                    </Button>
+
                 </StackPanel>
 
             </Border>

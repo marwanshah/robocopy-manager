@@ -1144,5 +1144,16 @@ namespace RoboCopyManager
                 Margin = new Thickness(0, 0, 8, 0)
             };
         }
+
+        private void About_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new AboutWindow
+            {
+                Owner = this
+            };
+
+            window.ShowDialog();
+        }
     }
+
 }
