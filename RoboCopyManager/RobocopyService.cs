@@ -242,12 +242,12 @@ namespace RoboCopyManager
         public async Task<int> RunCopyPlanAsync(
             CopyPlan plan,
             Action<string>? outputHandler = null,
-            Action<long>? progressHandler = null,
+            Action<long, long, int>? progressHandler = null,
             CancellationToken cancellationToken = default)
         {
             if (plan.FilesToCopy.Count == 0)
             {
-                progressHandler?.Invoke(0);
+                progressHandler?.Invoke(0, 0, 0);
                 return 0;
             }
 
@@ -266,6 +266,32 @@ namespace RoboCopyManager
                 })
                 .ToList();
 
+            var initialDestinations =
+                new Dictionary<CopyFileInfo, (bool Exists, long Size, DateTime LastWrite)>();
+
+            foreach (CopyFileInfo file in plan.FilesToCopy)
+            {
+                try
+                {
+                    if (File.Exists(file.DestinationPath))
+                    {
+                        var destinationInfo = new FileInfo(file.DestinationPath);
+                        initialDestinations[file] = (
+                            true,
+                            destinationInfo.Length,
+                            destinationInfo.LastWriteTimeUtc);
+                    }
+                    else
+                    {
+                        initialDestinations[file] = (false, 0, DateTime.MinValue);
+                    }
+                }
+                catch
+                {
+                    initialDestinations[file] = (false, 0, DateTime.MinValue);
+                }
+            }
+
             using var progressCts =
                 new CancellationTokenSource();
 
@@ -274,6 +300,8 @@ namespace RoboCopyManager
                 while (!progressCts.Token.IsCancellationRequested)
                 {
                     long transferredBytes = 0;
+                    long confirmedFileBytes = 0;
+                    int completedFileCount = 0;
 
                     foreach (CopyFileInfo file in plan.FilesToCopy)
                     {
@@ -287,9 +315,34 @@ namespace RoboCopyManager
                                 long destinationSize =
                                     new FileInfo(file.DestinationPath).Length;
 
-                                transferredBytes += Math.Min(
-                                    destinationSize,
-                                    file.SourceSize);
+                                DateTime destinationModified =
+                                    File.GetLastWriteTimeUtc(file.DestinationPath);
+
+                                bool isComplete =
+                                    destinationSize == file.SourceSize &&
+                                    Math.Abs((destinationModified - file.SourceModified).TotalSeconds) <= 2;
+
+                                if (isComplete)
+                                {
+                                    completedFileCount++;
+                                    confirmedFileBytes += file.SourceSize;
+                                    transferredBytes += file.SourceSize;
+                                }
+                                else
+                                {
+                                    var initial = initialDestinations[file];
+                                    bool destinationChanged =
+                                        !initial.Exists ||
+                                        destinationSize != initial.Size ||
+                                        destinationModified != initial.LastWrite;
+
+                                    if (destinationChanged)
+                                    {
+                                        transferredBytes += Math.Min(
+                                            destinationSize,
+                                            file.SourceSize);
+                                    }
+                                }
                             }
                         }
                         catch
@@ -301,7 +354,7 @@ namespace RoboCopyManager
 
                     if (!progressCts.Token.IsCancellationRequested)
                     {
-                        progressHandler?.Invoke(transferredBytes);
+                        progressHandler?.Invoke(transferredBytes, confirmedFileBytes, completedFileCount);
                     }
 
                     try
@@ -362,6 +415,8 @@ namespace RoboCopyManager
 
             // Final progress measurement
             long finalTransferredBytes = 0;
+            long finalConfirmedFileBytes = 0;
+            int finalCompletedFileCount = 0;
 
             foreach (CopyFileInfo file in plan.FilesToCopy)
             {
@@ -372,9 +427,34 @@ namespace RoboCopyManager
                         long destinationSize =
                             new FileInfo(file.DestinationPath).Length;
 
-                        finalTransferredBytes += Math.Min(
-                            destinationSize,
-                            file.SourceSize);
+                        DateTime destinationModified =
+                            File.GetLastWriteTimeUtc(file.DestinationPath);
+
+                        bool isComplete =
+                            destinationSize == file.SourceSize &&
+                            Math.Abs((destinationModified - file.SourceModified).TotalSeconds) <= 2;
+
+                        if (isComplete)
+                        {
+                            finalCompletedFileCount++;
+                            finalConfirmedFileBytes += file.SourceSize;
+                            finalTransferredBytes += file.SourceSize;
+                        }
+                        else
+                        {
+                            var initial = initialDestinations[file];
+                            bool destinationChanged =
+                                !initial.Exists ||
+                                destinationSize != initial.Size ||
+                                destinationModified != initial.LastWrite;
+
+                            if (destinationChanged)
+                            {
+                                finalTransferredBytes += Math.Min(
+                                    destinationSize,
+                                    file.SourceSize);
+                            }
+                        }
                     }
                 }
                 catch
@@ -383,7 +463,7 @@ namespace RoboCopyManager
                 }
             }
 
-            progressHandler?.Invoke(finalTransferredBytes);
+            progressHandler?.Invoke(finalTransferredBytes, finalConfirmedFileBytes, finalCompletedFileCount);
 
             return highestExitCode;
         }
@@ -401,8 +481,8 @@ namespace RoboCopyManager
             {
                 FileName = "robocopy.exe",
                 Arguments = string.IsNullOrWhiteSpace(fileArguments)
-                    ? $"\"{source}\" \"{destination}\" /E /MT:32 /R:1 /W:1"
-                    : $"\"{source}\" \"{destination}\" {fileArguments} /MT:32 /R:1 /W:1",
+                    ? $"\"{source}\" \"{destination}\" /E /MT:32 /R:1 /W:1 /BYTES /FP"
+                    : $"\"{source}\" \"{destination}\" {fileArguments} /MT:32 /R:1 /W:1 /BYTES /FP",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

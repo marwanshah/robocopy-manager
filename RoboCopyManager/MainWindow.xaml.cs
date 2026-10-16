@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -29,10 +30,11 @@ namespace RoboCopyManager
 
         private long totalBytes = 0;
         private long completedBytes = 0;
-        private long lastMeasuredBytes = 0;
+        private long currentFileSize = 0;
+        private readonly Queue<(DateTime Timestamp, long Bytes)> speedSamples = new();
 
         private Stopwatch transferStopwatch = new Stopwatch();
-        private DateTime lastSpeedUpdate = DateTime.Now;
+        private DateTime lastSpeedUpdate = DateTime.MinValue;
 
         private Grid? selectedRow;
         private readonly RobocopyService robocopyService = new RobocopyService();
@@ -740,11 +742,12 @@ namespace RoboCopyManager
                 completedBytes = 0;
 
                 currentFileName = string.Empty;
+                currentFileSize = 0;
 
-                lastMeasuredBytes = 0;
+                speedSamples.Clear();
 
                 transferStopwatch.Restart();
-                lastSpeedUpdate = DateTime.Now;
+                lastSpeedUpdate = DateTime.UtcNow;
 
                 // =====================================================
                 // STEP 5
@@ -834,7 +837,7 @@ namespace RoboCopyManager
                             var fileMatch =
                                 System.Text.RegularExpressions.Regex.Match(
                                     line,
-                                    @"^\s*(New File|Newer|Older|Modified)\s+\d+\s+(.+)$");
+                                    @"^\s*(New File|Newer|Older|Modified|Changed)\s+\d+\s+(.+)$");
 
                             if (fileMatch.Success)
                             {
@@ -846,6 +849,15 @@ namespace RoboCopyManager
                                 currentFileName =
                                     System.IO.Path.GetFileName(
                                     filePath);
+
+                                CopyFileInfo? activeFile = plan.FilesToCopy
+                                    .FirstOrDefault(file => string.Equals(
+                                        System.IO.Path.GetFileName(file.SourcePath),
+                                        currentFileName,
+                                        StringComparison.OrdinalIgnoreCase));
+                                Interlocked.Exchange(
+                                    ref currentFileSize,
+                                    activeFile?.SourceSize ?? 0);
 
                                 Dispatcher.Invoke(() =>
                                 {
@@ -866,6 +878,11 @@ namespace RoboCopyManager
                                     percentageMatch.Groups[1].Value,
                                     out int percentage))
                             {
+                                long confirmedBytes = Interlocked.Read(ref completedBytes);
+                                long activeFileBytes = Interlocked.Read(ref currentFileSize) * percentage / 100;
+                                UpdateTransferStats(
+                                    Math.Min(totalBytes, confirmedBytes + activeFileBytes));
+
                                 Dispatcher.Invoke(() =>
                                 {
                                     if (!string.IsNullOrWhiteSpace(
@@ -878,14 +895,21 @@ namespace RoboCopyManager
                             }
                         },
 
-                        transferredBytes =>
+                        (transferredBytes, confirmedFileBytes, filesCompleted) =>
                         {
-                            completedBytes = transferredBytes;
+                            Interlocked.Exchange(ref completedBytes, confirmedFileBytes);
+                            completedFiles = filesCompleted;
 
                             if (currentHistoryEntry != null)
                             {
                                 currentHistoryEntry.BytesTransferred = transferredBytes;
                             }
+
+                            Dispatcher.Invoke(() =>
+                            {
+                                CurrentFileText.Text =
+                                    $"Current: {completedFiles} / {plan.TotalFiles}";
+                            });
 
                             if (totalBytes <= 0)
                             {
@@ -898,7 +922,7 @@ namespace RoboCopyManager
                                     transferredBytes * 100 / totalBytes);
 
                             UpdateTransferStats(
-                                transferredBytes);
+                                confirmedFileBytes);
 
                             Dispatcher.Invoke(() =>
                             {
@@ -1164,51 +1188,52 @@ namespace RoboCopyManager
                 return;
             }
 
-            DateTime now = DateTime.Now;
-
-            double elapsedSeconds =
-                (now - lastSpeedUpdate).TotalSeconds;
-
-            if (elapsedSeconds < 0.5)
+            DateTime now = DateTime.UtcNow;
+            if ((now - lastSpeedUpdate).TotalSeconds < 0.5)
             {
                 return;
             }
 
-            long bytesTransferred =
-                currentTransferredBytes - lastMeasuredBytes;
-
-            double speedBytesPerSecond =
-                bytesTransferred / elapsedSeconds;
-
-            lastMeasuredBytes = currentTransferredBytes;
             lastSpeedUpdate = now;
+            long boundedBytes = Math.Min(totalBytes, Math.Max(0, currentTransferredBytes));
+            speedSamples.Enqueue((now, boundedBytes));
 
-            if (speedBytesPerSecond <= 0)
+            DateTime windowStart = now.AddSeconds(-2);
+            while (speedSamples.Count > 2 &&
+                   speedSamples.ElementAt(1).Timestamp <= windowStart)
             {
-                return;
+                speedSamples.Dequeue();
             }
 
-            double speedMBPerSecond =
-                speedBytesPerSecond / (1024 * 1024);
+            var oldestSample = speedSamples.Peek();
+            double windowSeconds = (now - oldestSample.Timestamp).TotalSeconds;
+            long windowBytes = boundedBytes - oldestSample.Bytes;
+            double speedBytesPerSecond =
+                windowSeconds >= 0.5 && windowBytes > 0
+                    ? windowBytes / windowSeconds
+                    : 0;
 
-            long remainingBytes =
-                Math.Max(
-                    0,
-                    totalBytes - currentTransferredBytes);
+            long remainingBytes = Math.Max(0, totalBytes - boundedBytes);
+            string etaText = "ETA: --:--:--";
 
-            double etaSeconds =
-                remainingBytes / speedBytesPerSecond;
+            if (remainingBytes == 0)
+            {
+                etaText = "ETA: 00:00:00";
+            }
+            else if (speedBytesPerSecond > 0)
+            {
+                double etaSeconds = Math.Min(
+                    TimeSpan.MaxValue.TotalSeconds,
+                    remainingBytes / speedBytesPerSecond);
+                TimeSpan eta = TimeSpan.FromSeconds(etaSeconds);
+                etaText = $"ETA: {eta:hh\\:mm\\:ss}";
+            }
 
-            TimeSpan eta =
-                TimeSpan.FromSeconds(etaSeconds);
-
+            double speedMBPerSecond = speedBytesPerSecond / (1024 * 1024);
             Dispatcher.Invoke(() =>
             {
-                SpeedText.Text =
-                    $"Speed: {speedMBPerSecond:F1} MB/s";
-
-                EtaText.Text =
-                    $"ETA: {eta:hh\\:mm\\:ss}";
+                SpeedText.Text = $"Speed: {speedMBPerSecond:F1} MB/s";
+                EtaText.Text = etaText;
             });
         }
         private TextBlock CreateCell(
