@@ -14,7 +14,23 @@ RoboCopyManager is a Windows WPF application designed to simplify the management
 
 ## Screenshots
 
-Application screenshots will be added here.
+### Main Window
+
+The main dashboard for managing and monitoring Robocopy jobs.
+
+![RoboCopyManager Main Window](screenshots/main-window.png)
+
+### Copy Summary
+
+View copy results, including files copied, overwritten, skipped, failed, total data transferred, duration, and average transfer speed.
+
+![RoboCopyManager Copy Summary](screenshots/copy-summary.png)
+
+### Add Copy Job
+
+Configure source and destination folders when creating a new copy job.
+
+![RoboCopyManager Add Copy Job](screenshots/add-copy-job.png)
 
 ## Installation
 
